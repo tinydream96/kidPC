@@ -6,7 +6,7 @@ import os
 import threading
 import sys
 import logging
-
+import configparser
 
 class RestReminder:
     def __init__(self):
@@ -14,6 +14,21 @@ class RestReminder:
         self.shutdown_scheduled = False
         self.shutdown_time = None
         self.root = None
+        # 读取配置文件
+        self.config = configparser.ConfigParser()
+        if not os.path.exists('config.ini'):
+            self.logger.error("config.ini not found!")
+            raise FileNotFoundError("config.ini not found")
+        try:
+            self.config.read('config.ini')
+            # 从配置文件获取参数
+            self.reminder_start_hour = self.config.getint('Settings', 'reminderStartHour')
+            self.reminder_interval_minutes = self.config.getint('Settings', 'reminderIntervalMinutes')
+            self.shutdown_start_hour = self.config.getint('Settings', 'shutdownStartHour')
+            self.shutdown_start_minute = self.config.getint('Settings', 'shutdownStartMinute')
+        except Exception as e:
+            self.logger.error(f"Error reading config.ini: {str(e)}")
+            raise
 
     def setup_logger(self):
         """配置日志记录"""
@@ -40,12 +55,12 @@ class RestReminder:
         return logger
 
     def check_time(self):
-        """检查当前时间是否在晚上9点之后"""
+        """检查当前时间是否在指定时间之后"""
         now = datetime.datetime.now()
-        evening_9 = now.replace(hour=12 minute=0, second=0, microsecond=0)
-        evening_9_30 = now.replace(hour=21, minute=30, second=0, microsecond=0)
+        evening_start = now.replace(hour=self.reminder_start_hour, minute=0, second=0, microsecond=0)
+        shutdown_start = now.replace(hour=self.shutdown_start_hour, minute=self.shutdown_start_minute, second=0, microsecond=0)
 
-        return now >= evening_9, now >= evening_9_30
+        return now >= evening_start, now >= shutdown_start
 
     def show_reminder_window(self, is_shutdown=False, countdown=300):
         """显示提醒窗口"""
@@ -196,16 +211,16 @@ class RestReminder:
 
                 if is_evening:
                     if is_late_evening and not self.shutdown_scheduled:
-                        # 晚上9点30分后，计划5分钟后关机
-                        self.logger.info("已过晚上9点30分，计划5分钟后关机")
+                        # 到达指定关机时间，计划5分钟后关机
+                        self.logger.info("已过指定关机时间，计划5分钟后关机")
                         self.schedule_shutdown(5)
                     else:
-                        # 晚上9点后但不到9点30分，每5分钟提醒一次
+                        # 到达指定提醒时间后，每隔指定分钟提醒一次
                         self.logger.info("显示休息提醒")
                         self.show_reminder_window()
 
-                # 等待5分钟
-                time.sleep(300)
+                # 等待指定分钟
+                time.sleep(self.reminder_interval_minutes * 60)
 
         except KeyboardInterrupt:
             self.logger.info("程序被用户中断")

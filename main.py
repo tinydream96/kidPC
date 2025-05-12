@@ -6,6 +6,7 @@ import logging
 from screenshot_sender import ScreenshotSender
 from usage_tracker import UsageTracker
 from float_window import FloatWindow
+from rest_reminder import RestReminder
 
 # 配置日志
 logging.basicConfig(
@@ -18,6 +19,7 @@ logging.basicConfig(
 tracker = UsageTracker()
 sender = ScreenshotSender(usage_tracker=tracker)  # 传递UsageTracker实例
 float_window = FloatWindow(tracker)
+reminder = RestReminder()
 
 logging.info("Screenshot bot started")
 
@@ -30,6 +32,10 @@ try:
     if sender.show_float_window:
         window_thread = threading.Thread(target=float_window.run, daemon=True)
         window_thread.start()
+
+    # 启动休息提醒线程
+    reminder_thread = threading.Thread(target=reminder.run, daemon=True)
+    reminder_thread.start()
 
     # 主循环处理截图发送
     while True:

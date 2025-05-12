@@ -9,6 +9,7 @@ config.ini
 venv/
 env/
 *.env
+*.bak
 
 # PyCharm
 .idea/

@@ -4,7 +4,7 @@ __pycache__
 *.pyo
 *.pyd
 *.so
-
+config.ini
 # Virtual environment
 venv/
 env/

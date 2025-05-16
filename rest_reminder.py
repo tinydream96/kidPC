@@ -8,7 +8,6 @@ import sys
 import logging
 import configparser
 
-
 class RestReminder:
     def __init__(self, usage_tracker=None):
         self.logger = self.setup_logger()
@@ -35,6 +34,8 @@ class RestReminder:
             self.continuous_usage_threshold = self.config.getint('Settings', 'continuousUsageThreshold',
                                                                  fallback=45) * 60  # 默认为45分钟
             self.forced_rest_duration = self.config.getint('Settings', 'forcedRestDuration', fallback=5) * 60  # 默认为5分钟
+            # 新增：强制关机时间
+            self.forced_shutdown_hour = self.config.getint('Settings', 'forcedShutdownHour', fallback=22)
         except Exception as e:
             self.logger.error(f"Error reading config.ini: {str(e)}")
             raise
@@ -69,8 +70,9 @@ class RestReminder:
         evening_start = now.replace(hour=self.evening_start_hour, minute=0, second=0, microsecond=0)
         late_evening_start = now.replace(hour=self.late_evening_start_hour, minute=self.late_evening_start_minute,
                                          second=0, microsecond=0)
+        forced_shutdown_time = now.replace(hour=self.forced_shutdown_hour, minute=0, second=0, microsecond=0)
 
-        return now >= evening_start, now >= late_evening_start
+        return now >= evening_start, now >= late_evening_start, now >= forced_shutdown_time
 
     def show_reminder_window(self, is_shutdown=False, countdown=300):
         """显示提醒窗口"""
@@ -312,7 +314,12 @@ class RestReminder:
 
         try:
             while True:
-                is_evening, is_late_evening = self.check_time()
+                is_evening, is_late_evening, is_forced_shutdown = self.check_time()
+
+                # 检查是否到达强制关机时间
+                if is_forced_shutdown:
+                    self.logger.info("到达强制关机时间，执行关机")
+                    self.execute_shutdown()
 
                 # 检查连续使用时间
                 if self.usage_tracker:

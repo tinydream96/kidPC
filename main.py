@@ -1,5 +1,4 @@
 # main.py
-
 import time
 import threading
 import logging
@@ -14,7 +13,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     filename='screenshot_bot.log'
 )
-
 # 初始化组件
 tracker = UsageTracker()
 sender = ScreenshotSender(usage_tracker=tracker)  # 传递UsageTracker实例
@@ -27,7 +25,6 @@ try:
     # 启动时间统计线程
     tracker_thread = threading.Thread(target=tracker.start_tracking, daemon=True)
     tracker_thread.start()
-
     # 启动浮窗线程
     if sender.show_float_window:
         window_thread = threading.Thread(target=float_window.run, daemon=True)

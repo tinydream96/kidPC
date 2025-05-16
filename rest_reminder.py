@@ -25,10 +25,10 @@ class RestReminder:
 
         try:
             self.config.read('config.ini')
-            # 从配置文件获取参数
-            self.evening_start_hour = self.config.getint('Settings', 'eveningStartHour', fallback=21)
-            self.late_evening_start_hour = self.config.getint('Settings', 'lateEveningStartHour', fallback=21)
-            self.late_evening_start_minute = self.config.getint('Settings', 'lateEveningStartMinute', fallback=30)
+            # 从配置文件获取参数（使用更具描述性的名称）
+            self.first_reminder_hour = self.config.getint('Settings', 'firstReminderHour', fallback=21)
+            self.shutdown_plan_hour = self.config.getint('Settings', 'shutdownPlanHour', fallback=21)
+            self.shutdown_plan_minute = self.config.getint('Settings', 'shutdownPlanMinute', fallback=30)
             self.shutdown_delay_minutes = self.config.getint('Settings', 'shutdownDelayMinutes', fallback=5)
             self.reminder_interval_seconds = self.config.getint('Settings', 'reminderIntervalSeconds', fallback=300)
             self.continuous_usage_threshold = self.config.getint('Settings', 'continuousUsageThreshold',
@@ -67,12 +67,12 @@ class RestReminder:
     def check_time(self):
         """检查当前时间是否在晚上指定时间之后"""
         now = datetime.datetime.now()
-        evening_start = now.replace(hour=self.evening_start_hour, minute=0, second=0, microsecond=0)
-        late_evening_start = now.replace(hour=self.late_evening_start_hour, minute=self.late_evening_start_minute,
+        first_reminder_time = now.replace(hour=self.first_reminder_hour, minute=0, second=0, microsecond=0)
+        shutdown_plan_time = now.replace(hour=self.shutdown_plan_hour, minute=self.shutdown_plan_minute,
                                          second=0, microsecond=0)
         forced_shutdown_time = now.replace(hour=self.forced_shutdown_hour, minute=0, second=0, microsecond=0)
 
-        return now >= evening_start, now >= late_evening_start, now >= forced_shutdown_time
+        return now >= first_reminder_time, now >= shutdown_plan_time, now >= forced_shutdown_time
 
     def show_reminder_window(self, is_shutdown=False, countdown=300):
         """显示提醒窗口"""
@@ -334,7 +334,7 @@ class RestReminder:
                     if is_late_evening and not self.shutdown_scheduled:
                         # 晚上指定时间后，计划指定分钟后关机
                         self.logger.info(
-                            f"已过晚上 {self.late_evening_start_hour}:{self.late_evening_start_minute}，计划 {self.shutdown_delay_minutes} 分钟后关机")
+                            f"已过晚上 {self.shutdown_plan_hour}:{self.shutdown_plan_minute}，计划 {self.shutdown_delay_minutes} 分钟后关机")
                         self.schedule_shutdown(self.shutdown_delay_minutes)
                     else:
                         # 晚上指定时间前，每指定间隔提醒一次

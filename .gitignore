@@ -6,6 +6,10 @@ __pycache__
 *.so
 *.bak
 config.ini
+usage_stats.json
+rest_reminder.log
+screenshot_bot.log
+screenshots/
 dist/
 build/
 

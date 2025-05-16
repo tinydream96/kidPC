@@ -32,6 +32,7 @@ class UsageTracker:
         self.daily_usage_time = 0  # 当天累计使用时间（秒）
         self.last_check_time = time.time()  # 上次检查时间
         self.lock = threading.Lock()  # 线程锁
+        self.continuous_usage_time = 0  # 连续使用时间（秒）
 
         # 确保数据文件夹存在
         os.makedirs(self.data_folder, exist_ok=True)
@@ -100,6 +101,7 @@ class UsageTracker:
                     if 'date' not in stats or stats['date'] != today:
                         self.logger.info("New day detected. Resetting usage stats.")
                         self.daily_usage_time = 0
+                        self.continuous_usage_time = 0  # 跨天重置连续使用时间
                         self.save_usage_stats()
             except Exception as e:
                 self.logger.error(f"Error checking date: {str(e)}")
@@ -109,13 +111,24 @@ class UsageTracker:
             time_elapsed = current_time - self.last_check_time
             self.last_check_time = current_time
             self.daily_usage_time += time_elapsed
+            self.continuous_usage_time += time_elapsed
             self.logger.debug(
-                f"Added {time_elapsed:.2f} seconds of usage time. Total: {self.format_time(self.daily_usage_time)}")
+                f"Added {time_elapsed:.2f} seconds of usage time. Total: {self.format_time(self.daily_usage_time)}, Continuous: {self.format_time(self.continuous_usage_time)}")
 
     def get_usage_time(self):
         """获取当前累计使用时间"""
         with self.lock:
             return self.daily_usage_time
+
+    def get_continuous_usage_time(self):
+        """获取当前连续使用时间"""
+        with self.lock:
+            return self.continuous_usage_time
+
+    def reset_continuous_usage_time(self):
+        """重置连续使用时间"""
+        with self.lock:
+            self.continuous_usage_time = 0
 
     def start_tracking(self):
         """开始跟踪电脑使用时间"""

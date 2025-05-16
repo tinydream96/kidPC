@@ -19,7 +19,7 @@ logging.basicConfig(
 tracker = UsageTracker()
 sender = ScreenshotSender(usage_tracker=tracker)  # 传递UsageTracker实例
 float_window = FloatWindow(tracker)
-reminder = RestReminder()
+reminder = RestReminder(usage_tracker=tracker)  # 传递UsageTracker实例
 
 logging.info("Screenshot bot started")
 

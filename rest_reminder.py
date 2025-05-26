@@ -6,66 +6,49 @@ import os
 import threading
 import sys
 import logging
-import configparser
+
+
+# import configparser # 不需要单独导入，通过 config_manager 访问
 
 class RestReminder:
-    def __init__(self, usage_tracker=None):
-        self.logger = self.setup_logger()
+    # 接收主 Tkinter 根窗口和 ConfigManager 实例
+    def __init__(self, main_root, config_manager, usage_tracker=None):
+        self.logger = logging.getLogger("RestReminder")  # 统一日志获取方式
         self.shutdown_scheduled = False
         self.shutdown_time = None
-        self.root = None
+        self.root = None  # 用于提醒窗口的 Toplevel 实例
         self.usage_tracker = usage_tracker
-        self.window_open = False  # 新增：跟踪窗口状态
+        self.window_open = False  # 跟踪窗口状态
+        self.main_root = main_root  # 存储主 Tkinter 根窗口的引用
 
-        # 读取配置文件
-        self.config = configparser.ConfigParser()
-        if not os.path.exists('config.ini'):
-            self.logger.error("config.ini not found!")
-            raise FileNotFoundError("config.ini not found")
+        self.config_manager = config_manager  # 存储 ConfigManager 实例
 
-        try:
-            self.config.read('config.ini')
-            # 从配置文件获取参数（使用更具描述性的名称）
-            self.first_reminder_hour = self.config.getint('Settings', 'firstReminderHour', fallback=21)
-            self.shutdown_plan_hour = self.config.getint('Settings', 'shutdownPlanHour', fallback=21)
-            self.shutdown_plan_minute = self.config.getint('Settings', 'shutdownPlanMinute', fallback=30)
-            self.shutdown_delay_minutes = self.config.getint('Settings', 'shutdownDelayMinutes', fallback=5)
-            self.reminder_interval_seconds = self.config.getint('Settings', 'reminderIntervalSeconds', fallback=300)
-            self.continuous_usage_threshold = self.config.getint('Settings', 'continuousUsageThreshold',
-                                                                 fallback=45) * 60  # 默认为45分钟
-            self.forced_rest_duration = self.config.getint('Settings', 'forcedRestDuration', fallback=5) * 60  # 默认为5分钟
-            # 新增：强制关机时间
-            self.forced_shutdown_hour = self.config.getint('Settings', 'forcedShutdownHour', fallback=22)
-        except Exception as e:
-            self.logger.error(f"Error reading config.ini: {str(e)}")
-            raise
+        # 从 ConfigManager 获取参数
+        self.first_reminder_hour = self.config_manager.get_setting('Settings', 'firstReminderHour', type=int,
+                                                                   fallback=21)
+        self.shutdown_plan_hour = self.config_manager.get_setting('Settings', 'shutdownPlanHour', type=int, fallback=21)
+        self.shutdown_plan_minute = self.config_manager.get_setting('Settings', 'shutdownPlanMinute', type=int,
+                                                                    fallback=30)
+        self.shutdown_delay_minutes = self.config_manager.get_setting('Settings', 'shutdownDelayMinutes', type=int,
+                                                                      fallback=5)
+        self.reminder_interval_seconds = self.config_manager.get_setting('Settings', 'reminderIntervalSeconds',
+                                                                         type=int, fallback=300)
+        self.continuous_usage_threshold = self.config_manager.get_setting('Settings', 'continuousUsageThreshold',
+                                                                          type=int, fallback=10) * 60  # 默认为10分钟
+        self.forced_rest_duration = self.config_manager.get_setting('Settings', 'forcedRestDuration', type=int,
+                                                                    fallback=1) * 60  # 默认为1分钟
+        self.forced_shutdown_hour = self.config_manager.get_setting('Settings', 'forcedShutdownHour', type=int,
+                                                                    fallback=22)
 
-    def setup_logger(self):
-        """配置日志记录"""
-        logger = logging.getLogger("RestReminder")
-        logger.setLevel(logging.INFO)
+        self.logger.info("RestReminder initialized with settings from ConfigManager.")
 
-        # 创建文件处理器
-        file_handler = logging.FileHandler("rest_reminder.log")
-        file_handler.setLevel(logging.INFO)
-
-        # 创建控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-
-        # 创建格式化器并添加到处理器
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-
-        # 将处理器添加到logger
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
-
-        return logger
+    # 移除 setup_logger 方法，因为已经在 main.py 中统一配置了
+    # def setup_logger(self):
+    #     """配置日志记录"""
+    #     # ... (此方法被移除) ...
 
     def check_time(self):
-        """检查当前时间是否在晚上指定时间之后"""
+        # ... (保持不变) ...
         now = datetime.datetime.now()
         first_reminder_time = now.replace(hour=self.first_reminder_hour, minute=0, second=0, microsecond=0)
         shutdown_plan_time = now.replace(hour=self.shutdown_plan_hour, minute=self.shutdown_plan_minute,
@@ -77,154 +60,117 @@ class RestReminder:
     def show_reminder_window(self, is_shutdown=False, countdown=300):
         """显示提醒窗口"""
         if self.window_open:
-            self.logger.info("窗口已打开，跳过显示")
+            self.logger.info("提醒窗口已打开，跳过显示")
+            return
+
+        # 在主线程中调度窗口创建
+        self.main_root.after(0, lambda: self._create_reminder_window(is_shutdown, countdown))
+
+    def _create_reminder_window(self, is_shutdown=False, countdown=300):
+        if self.window_open:  # 再次检查，防止多重调度
             return
 
         self.window_open = True
-        self.root = tk.Tk()
+        self.root = tk.Toplevel(self.main_root)  # 使用 Toplevel
         self.root.title("休息提醒")
-        self.root.attributes('-topmost', True)  # 窗口置顶
-        self.root.geometry("600x400")  # 窗口大小
-        self.root.configure(bg="#FF6B6B")  # 背景颜色
+        self.root.attributes('-topmost', True)
+        self.root.geometry("600x400")
+        self.root.configure(bg="#FF6B6B")
 
-        # 设置字体
         title_font = ("微软雅黑", 36, "bold")
         content_font = ("微软雅黑", 24)
 
-        # 创建标题
-        title_label = tk.Label(
-            self.root,
-            text="该休息啦！",
-            font=title_font,
-            bg="#FF6B6B",
-            fg="white"
-        )
+        title_label = tk.Label(self.root, text="该休息啦！", font=title_font, bg="#FF6B6B", fg="white")
         title_label.pack(pady=40)
 
-        # 创建内容
         if is_shutdown:
             content = f"电脑将在 {countdown // 60} 分钟后自动关机\n请保存好您的工作！"
         else:
             content = "已经很晚了，请注意休息！\n长时间使用电脑会影响健康。"
 
-        content_label = tk.Label(
-            self.root,
-            text=content,
-            font=content_font,
-            bg="#FF6B6B",
-            fg="white",
-            wraplength=500
-        )
+        content_label = tk.Label(self.root, text=content, font=content_font, bg="#FF6B6B", fg="white", wraplength=500)
         content_label.pack(pady=20)
 
-        # 创建按钮
         button_frame = tk.Frame(self.root, bg="#FF6B6B")
         button_frame.pack(pady=30)
 
         if is_shutdown:
-            # 关机倒计时窗口只显示取消按钮
-            cancel_button = tk.Button(
-                button_frame,
-                text="取消关机",
-                font=("微软雅黑", 18),
-                bg="#FFD166",
-                fg="#2A2A2A",
-                width=15,
-                command=self.cancel_shutdown
-            )
+            cancel_button = tk.Button(button_frame, text="取消关机", font=("微软雅黑", 18), bg="#FFD166", fg="#2A2A2A",
+                                      width=15, command=self.cancel_shutdown)
             cancel_button.pack()
+            self.update_countdown(countdown)  # 启动倒计时更新
         else:
-            # 普通提醒窗口显示知道了按钮
-            ok_button = tk.Button(
-                button_frame,
-                text="知道了",
-                font=("微软雅黑", 18),
-                bg="#06D6A0",
-                fg="white",
-                width=15,
-                command=self.close_window
-            )
+            ok_button = tk.Button(button_frame, text="知道了", font=("微软雅黑", 18), bg="#06D6A0", fg="white",
+                                  width=15, command=self.close_window)
             ok_button.pack()
 
-        # 窗口关闭协议
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
-
-        # 如果是关机倒计时，启动倒计时更新
-        if is_shutdown:
-            self.update_countdown(countdown)
-
-        self.root.mainloop()
+        # 不再调用 mainloop，让主程序的 mainloop 管理这个 Toplevel 窗口
 
     def show_forced_rest_window(self, countdown=300):
         """显示强制休息窗口"""
         if self.window_open:
-            self.logger.info("窗口已打开，跳过显示")
+            self.logger.info("强制休息窗口已打开，跳过显示")
+            return
+
+        # 在主线程中调度窗口创建
+        self.main_root.after(0, lambda: self._create_forced_rest_window(countdown))
+
+    def _create_forced_rest_window(self, countdown=300):
+        if self.window_open:  # 再次检查
             return
 
         self.window_open = True
-        self.root = tk.Tk()
+        self.root = tk.Toplevel(self.main_root)  # 使用 Toplevel
         self.root.title("强制休息提醒")
 
-        # 全屏设置
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        self.root.geometry(f"{screen_width}x{screen_height}+0+0")  # 全屏尺寸 + 坐标(左上角)
+        self.root.geometry(f"{screen_width}x{screen_height}+0+0")
 
-        self.root.attributes('-topmost', True)  # 窗口置顶
-        self.root.configure(bg="#C2F0C2")  # 背景颜色
-
-        # 禁止窗口大小调整
+        self.root.attributes('-topmost', True)
+        self.root.configure(bg="#C2F0C2")
         self.root.resizable(width=False, height=False)
-        # 👇 在这里加入 overrideredirect
-        self.root.overrideredirect(True)  # 隐藏标题栏和窗口边框
-        # 设置字体
+        self.root.overrideredirect(True)
+
         title_font = ("微软雅黑", int(screen_height / 10), "bold")
         content_font = ("微软雅黑", int(screen_height / 20))
 
-        # 创建标题
-        title_label = tk.Label(
-            self.root,
-            text="强制休息！",
-            font=title_font,
-            bg="#C2F0C2",
-            fg="white"
-        )
+        title_label = tk.Label(self.root, text="强制休息！", font=title_font, bg="#C2F0C2", fg="white")
         title_label.pack(pady=int(screen_height * 0.1))
 
-        # 创建内容
         content = f"您已连续使用电脑{self.continuous_usage_threshold // 60}分钟，请休息 {countdown // 60} 分钟！"
-        content_label = tk.Label(
-            self.root,
-            text=content,
-            font=content_font,
-            bg="#C2F0C2",
-            fg="white",
-            wraplength=screen_width * 0.8
-        )
+        content_label = tk.Label(self.root, text=content, font=content_font, bg="#C2F0C2", fg="white",
+                                 wraplength=screen_width * 0.8)
         content_label.pack(pady=int(screen_height * 0.05))
 
-        # 禁止关闭窗口
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
-
-        # 启动倒计时更新
         self.update_forced_rest_countdown(countdown)
-
-        self.root.mainloop()
+        # 不再调用 mainloop
 
     def close_window(self):
-        """安全关闭窗口"""
+        """安全关闭窗口，确保在主线程中执行"""
         if self.root and self.window_open:
-            self.logger.info("关闭窗口")
+            self.logger.info("关闭窗口请求")
+            # 在主线程中执行销毁操作
+            self.main_root.after(0, self._perform_close_window)
+
+    def _perform_close_window(self):
+        if self.root and self.window_open:
             try:
                 self.root.destroy()
+                self.logger.info("窗口已销毁")
             except Exception as e:
-                self.logger.error(f"关闭窗口时出错: {e}")
+                self.logger.error(f"销毁窗口时出错: {e}")
             self.root = None
             self.window_open = False
 
     def update_forced_rest_countdown(self, seconds):
-        """更新强制休息倒计时"""
-        if not self.root or not self.window_open:
+        # ... (保持不变，但确保内部对 self.root 的操作在主线程) ...
+        # Tkinter 的 after 方法会自动在创建 after 调用的那个线程的 mainloop 中执行
+        # 因为 show_forced_rest_window 内部通过 self.main_root.after(0, ...) 调度了 _create_forced_rest_window
+        # 所以这里的 after 也会在 main_root 的 mainloop 中执行，是安全的
+        if not self.root or not self.root.winfo_exists() or not self.window_open:
             return
 
         if seconds <= 0:
@@ -233,53 +179,48 @@ class RestReminder:
                 self.usage_tracker.reset_continuous_usage_time()
             return
 
-        # 更新标签文本
         content = f"您已连续使用电脑{self.continuous_usage_threshold // 60}分钟，请休息 {seconds // 60} 分钟{seconds % 60}秒！"
         for widget in self.root.winfo_children():
             if isinstance(widget, tk.Label) and widget.cget("text").startswith("您已连续使用电脑"):
                 widget.config(text=content)
                 break
 
-        # 1秒后再次更新
         self.root.after(1000, lambda: self.update_forced_rest_countdown(seconds - 1))
 
     def update_countdown(self, seconds):
-        """更新关机倒计时"""
-        if not self.root or not self.window_open:
+        # ... (保持不变，原因同上) ...
+        if not self.root or not self.root.winfo_exists() or not self.window_open:
             return
 
         if seconds <= 0:
             self.close_window()
-            self.execute_shutdown()
+            # 在主线程中调度关机
+            self.main_root.after(0, self.execute_shutdown)
             return
 
-        # 更新标签文本
         content = f"电脑将在 {seconds // 60} 分钟{seconds % 60}秒后自动关机\n请保存好您的工作！"
         for widget in self.root.winfo_children():
             if isinstance(widget, tk.Label) and widget.cget("text").startswith("电脑将在"):
                 widget.config(text=content)
                 break
 
-        # 1秒后再次更新
         self.root.after(1000, lambda: self.update_countdown(seconds - 1))
 
     def schedule_shutdown(self, minutes=5):
-        """计划电脑关机"""
+        # ... (保持不变) ...
         if self.shutdown_scheduled:
             return
 
         self.shutdown_scheduled = True
         self.shutdown_time = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
 
-        # 执行系统关机命令
         os.system(f"shutdown /s /t {minutes * 60}")
         self.logger.info(f"已计划在 {minutes} 分钟后关机")
 
-        # 显示关机倒计时窗口
         self.show_reminder_window(is_shutdown=True, countdown=minutes * 60)
 
     def cancel_shutdown(self):
-        """取消关机计划"""
+        # ... (保持不变) ...
         if self.shutdown_scheduled:
             os.system("shutdown /a")
             self.shutdown_scheduled = False
@@ -288,23 +229,16 @@ class RestReminder:
             # 关闭倒计时窗口
             self.close_window()
 
-            # 显示取消提示
-            self.show_cancel_message()
+            # 显示取消提示 (通过主线程调度)
+            self.main_root.after(0, self._show_cancel_message_on_main_thread)
 
-    def show_cancel_message(self):
-        """显示取消关机提示"""
-        if self.window_open:
-            return
-
-        self.window_open = True
-        root = tk.Tk()
-        root.withdraw()  # 隐藏主窗口
-        messagebox.showinfo("取消关机", "已取消自动关机计划。\n但请记得早点休息！")
-        root.destroy()
-        self.window_open = False
+    def _show_cancel_message_on_main_thread(self):
+        """在主线程中显示取消关机提示"""
+        # messagebox 是 Tkinter 的一部分，最好在主线程调用
+        messagebox.showinfo("取消关机", "已取消自动关机计划。\n但请记得早点休息！", parent=self.main_root)
+        self.logger.info("Cancel shutdown message shown.")
 
     def execute_shutdown(self):
-        """执行关机命令"""
         self.logger.info("执行自动关机")
         os.system("shutdown /s /t 0")
 
@@ -316,42 +250,34 @@ class RestReminder:
             while True:
                 is_evening, is_late_evening, is_forced_shutdown = self.check_time()
 
-                # 检查是否到达强制关机时间
                 if is_forced_shutdown:
                     self.logger.info("到达强制关机时间，执行关机")
+                    # 直接调用系统关机，不需要通过 Tkinter 调度
                     self.execute_shutdown()
+                    # 关机后程序会终止，不需要继续循环
+                    break
 
-                # 检查连续使用时间
                 if self.usage_tracker:
                     continuous_usage_time = self.usage_tracker.get_continuous_usage_time()
-                    if continuous_usage_time >= self.continuous_usage_threshold:
-                        # 连续使用时间超过阈值，强制休息
+                    if continuous_usage_time >= self.continuous_usage_threshold and not self.window_open:
                         self.logger.info(
                             f"连续使用{continuous_usage_time // 60}分钟，超过阈值{self.continuous_usage_threshold // 60}分钟，强制休息")
                         self.show_forced_rest_window(self.forced_rest_duration)
 
-                if is_evening:
+                if is_evening and not self.window_open:  # 只有当提醒窗口未打开时才显示
                     if is_late_evening and not self.shutdown_scheduled:
-                        # 晚上指定时间后，计划指定分钟后关机
                         self.logger.info(
                             f"已过晚上 {self.shutdown_plan_hour}:{self.shutdown_plan_minute}，计划 {self.shutdown_delay_minutes} 分钟后关机")
                         self.schedule_shutdown(self.shutdown_delay_minutes)
-                    else:
-                        # 晚上指定时间前，每指定间隔提醒一次
+                    elif not is_late_evening:  # 在计划关机时间之前，显示普通提醒
                         self.logger.info("显示休息提醒")
                         self.show_reminder_window()
 
-                # 等待指定间隔
                 time.sleep(self.reminder_interval_seconds)
 
-        except KeyboardInterrupt:
-            self.logger.info("程序被用户中断")
         except Exception as e:
             self.logger.error(f"程序运行出错: {str(e)}", exc_info=True)
         finally:
-            # 如果有关机计划，取消它
             if self.shutdown_scheduled:
                 self.cancel_shutdown()
-
-            # 确保窗口被关闭
-            self.close_window()
+            self.close_window()  # 确保在线程结束时关闭所有打开的窗口

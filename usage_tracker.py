@@ -82,9 +82,22 @@ class UsageTracker:
                 self.daily_usage_time = 0
                 self.continuous_usage_time = 0
         else:
-            self.logger.info("Usage stats file not found. Daily usage time initialized to 0.")
-        self.daily_usage_time = 0.0
+            # This path means os.path.exists(self.usage_stats_file) is false.
+            # self.daily_usage_time should have been initialized to 0.0 earlier if this path is taken
+            # (e.g. in __init__ or if it was reset due to an error/new day prior to this specific check).
+            # For clarity, we can ensure it's 0.0 if not already set by earlier logic for "file not found".
+            # However, the current structure has self.daily_usage_time = 0.0 in __init__
+            # and it's set to a loaded value or 0.0 within the try-except block.
+            # So, if we reach here, self.daily_usage_time already holds the correct value (0.0 or loaded value).
+            self.logger.info("Usage stats file not found. Daily usage time is as previously determined (e.g., 0 or loaded).")
+
+        # Ensure `self.daily_usage_time` is not touched here, preserving its value from the logic above.
+        # The bug was an unconditional `self.daily_usage_time = 0.0` here.
+
+        # These should always be reset at the end of loading stats,
+        # as they pertain to the current session's tracking.
         self.continuous_usage_time = 0.0
+        self.last_check_time = time.time() # Ensures last_check_time is always set after loading/initializing.
 
         return self.daily_usage_time
 

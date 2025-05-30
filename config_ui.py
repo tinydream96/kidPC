@@ -11,8 +11,33 @@ import logging
 
 logger = logging.getLogger("ConfigUI")
 
+UI_STRINGS = {
+    'zh_CN': {
+        'error_title': "错误",
+        'icon_not_found_message': "icon.png 未找到！请确保图标文件在程序同目录。",
+        'menu_open_settings': "打开设置",
+        'menu_change_password': "修改密码",
+        'menu_exit': "退出",
+        'config_window_title': "配置设置",
+        'password_prompt_title': "密码验证",
+        'password_prompt_label': "请输入密码：",
+        'password_error_message': "密码错误！",
+        'save_button_text': "保存",
+        'info_title': "提示",
+        'config_saved_message': "配置已保存！",
+        'current_password_prompt': "请输入当前密码：",
+        'new_password_prompt': "请输入新密码：",
+        'password_changed_message': "密码已修改！",
+        'new_password_empty_message': "新密码不能为空。",
+    }
+}
+
 
 class ConfigUI:
+    def get_string(self, key, lang='zh_CN'):
+        return UI_STRINGS.get(lang, {}).get(key, f"Missing string: {key}")
+
+    # 接收 main.py 的主 Tkinter 根窗口 (root) 和 ConfigManager 实例
     # 接收 main.py 的主 Tkinter 根窗口 (root) 和 ConfigManager 实例
     def __init__(self, main_root, config_manager):
         self.root = main_root  # 使用主 root 作为 Toplevel 的父窗口
@@ -32,7 +57,7 @@ class ConfigUI:
             logger.info("Tray icon image loaded.")
         except FileNotFoundError:
             # 托盘图标找不到时不阻止程序启动，但给出错误提示
-            messagebox.showerror("错误", "icon.png 未找到！请确保图标文件在程序同目录。", parent=self.root)
+            messagebox.showerror(self.get_string('error_title'), self.get_string('icon_not_found_message'), parent=self.root)
             logger.error("Tray icon file 'icon.png' not found.")
             # return # 移除 return，允许程序继续运行，只是没有托盘图标
             # 如果没有图标，可以尝试使用默认图标或者不创建托盘
@@ -41,11 +66,11 @@ class ConfigUI:
             return  # 暂时保留 return，确保不会因为图标问题导致后续错误
 
         menu = (
-            pystray.MenuItem('打开设置', self._schedule_open_settings),  # 调度到主线程
-            pystray.MenuItem('修改密码', self._schedule_change_password),  # 调度到主线程
-            pystray.MenuItem('退出', self._schedule_quit_app)  # 调度到主线程
+            pystray.MenuItem(self.get_string('menu_open_settings'), self._schedule_open_settings),  # 调度到主线程
+            pystray.MenuItem(self.get_string('menu_change_password'), self._schedule_change_password),  # 调度到主线程
+            pystray.MenuItem(self.get_string('menu_exit'), self._schedule_quit_app)  # 调度到主线程
         )
-        self.tray = pystray.Icon("config_ui", image, "配置设置", menu)
+        self.tray = pystray.Icon("config_ui", image, self.get_string('config_window_title'), menu)
 
         # 托盘图标本身运行在一个独立的守护线程中
         # 只有在 main.py 的根窗口启动后，托盘图标才能正常工作
@@ -59,20 +84,20 @@ class ConfigUI:
     def open_settings(self):
         # 暂时显示主窗口作为simpledialog的父窗口，解决macOS上无法显示对话框的问题
         self.root.deiconify()
-        password = simpledialog.askstring("密码验证", "请输入密码：", show='*', parent=self.root)
+        password = simpledialog.askstring(self.get_string('password_prompt_title'), self.get_string('password_prompt_label'), show='*', parent=self.root)
         self.root.withdraw()  # 对话框结束后立即隐藏主窗口
 
         if password == self.password:
             self.show_settings_window()
             logger.info("Password correct. Opening settings window.")
         else:
-            messagebox.showerror("错误", "密码错误！", parent=self.root)
+            messagebox.showerror(self.get_string('error_title'), self.get_string('password_error_message'), parent=self.root)
             logger.warning("Incorrect password entered for settings.")
 
     def show_settings_window(self):
         # 使用 Toplevel 作为设置窗口，而不是 Tk
         settings_window = tk.Toplevel(self.root)
-        settings_window.title("配置设置")
+        settings_window.title(self.get_string('config_window_title'))
         # 设置窗口居中（可选）
         settings_window.update_idletasks()
         x = self.root.winfo_x() + (self.root.winfo_width() / 2) - (settings_window.winfo_width() / 2)
@@ -106,7 +131,7 @@ class ConfigUI:
             row += 1
 
         # 保存按钮
-        save_button = tk.Button(settings_window, text="保存", command=lambda: self.save_config(settings_window))
+        save_button = tk.Button(settings_window, text=self.get_string('save_button_text'), command=lambda: self.save_config(settings_window))
         save_button.grid(row=row, column=0, columnspan=2, pady=10)
         logger.debug("Save button added to settings window.")
 
@@ -130,7 +155,7 @@ class ConfigUI:
                 self.config_manager.set_setting('Settings', key, value)
 
         self.config_manager.save_config()  # 统一通过 ConfigManager 保存
-        messagebox.showinfo("提示", "配置已保存！", parent=window)
+        messagebox.showinfo(self.get_string('info_title'), self.get_string('config_saved_message'), parent=window)
         logger.info("Configuration saved successfully.")
         window.destroy()
 
@@ -140,12 +165,12 @@ class ConfigUI:
 
     def change_password(self):
         self.root.deiconify()  # 暂时显示主窗口
-        old_password = simpledialog.askstring("密码验证", "请输入当前密码：", show='*', parent=self.root)
+        old_password = simpledialog.askstring(self.get_string('password_prompt_title'), self.get_string('current_password_prompt'), show='*', parent=self.root)
         self.root.withdraw()  # 隐藏主窗口
 
         if old_password == self.password:
             self.root.deiconify()  # 暂时显示主窗口
-            new_password = simpledialog.askstring("修改密码", "请输入新密码：", show='*', parent=self.root)
+            new_password = simpledialog.askstring(self.get_string('menu_change_password'), self.get_string('new_password_prompt'), show='*', parent=self.root)
             self.root.withdraw()  # 隐藏主窗口
 
             if new_password:
@@ -153,13 +178,13 @@ class ConfigUI:
                 # 注意：configparser 默认会将键转换为小写，所以这里也用小写匹配
                 self.config_manager.set_setting('Settings', 'adminPassword', new_password)
                 self.config_manager.save_config()  # 保存到文件
-                messagebox.showinfo("提示", "密码已修改！", parent=self.root)
+                messagebox.showinfo(self.get_string('info_title'), self.get_string('password_changed_message'), parent=self.root)
                 logger.info("Admin password changed successfully.")
             else:
-                messagebox.showinfo("提示", "新密码不能为空。", parent=self.root)
+                messagebox.showinfo(self.get_string('info_title'), self.get_string('new_password_empty_message'), parent=self.root)
                 logger.warning("New password was empty.")
         else:
-            messagebox.showerror("错误", "密码错误！", parent=self.root)
+            messagebox.showerror(self.get_string('error_title'), self.get_string('password_error_message'), parent=self.root)
             logger.warning("Incorrect password entered for password change.")
 
     # 调度到主线程

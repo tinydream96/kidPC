@@ -1,3 +1,6 @@
+from config_manager import ConfigManager
+from usage_tracker import UsageTracker
+from typing import Optional, Dict
 import os
 import time
 # import configparser # 移除，使用 ConfigManager
@@ -13,38 +16,53 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 class ScreenshotSender:
-    def __init__(self, config_manager, usage_tracker=None):  # 接收 ConfigManager 实例
+    logger: logging.Logger
+    usage_tracker: Optional[UsageTracker]
+    running: bool
+    config_manager: ConfigManager
+    data_folder: str
+    bot_token: str
+    chat_id: str
+    proxy: Optional[str]
+    interval: int
+    proxies: Optional[Dict[str, str]]
+
+    def __init__(self, config_manager: ConfigManager, usage_tracker: Optional[UsageTracker] = None) -> None:
         self.logger = logging.getLogger("ScreenshotSender")
         self.usage_tracker = usage_tracker
-        self.running = False  # 控制线程运行状态
+        self.running = False
 
-        self.config_manager = config_manager  # 存储 ConfigManager 实例
+        self.config_manager = config_manager
 
-        # 从 ConfigManager 获取参数
-        self.data_folder = self.config_manager.get_setting('Settings', 'dataFolder')
-        self.bot_token = self.config_manager.get_setting('Settings', 'botToken')
-        self.chat_id = self.config_manager.get_setting('Settings', 'chatId')
-        self.proxy = self.config_manager.get_setting('Settings', 'proxy', fallback='')
-        self.interval = self.config_manager.get_setting('Settings', 'screenshotInterval', type=int,
-                                                        fallback=1) * 60  # 转换为秒
-        # self.show_float_window = self.config_manager.get_setting('Settings', 'showFloatWindow', type=bool, fallback=True) # 这个设置在 ScreenshotSender 中不直接使用，可以移除
+        # 从 ConfigManager 获取参数, ensuring types
+        data_folder_setting = self.config_manager.get_setting('Settings', 'dataFolder')
+        self.data_folder = str(data_folder_setting) if data_folder_setting is not None else ".\\default_screenshots"
+
+        bot_token_setting = self.config_manager.get_setting('Settings', 'botToken')
+        self.bot_token = str(bot_token_setting) if bot_token_setting is not None else "YOUR_BOT_TOKEN"
+
+        chat_id_setting = self.config_manager.get_setting('Settings', 'chatId')
+        self.chat_id = str(chat_id_setting) if chat_id_setting is not None else "YOUR_CHAT_ID"
+
+        proxy_setting = self.config_manager.get_setting('Settings', 'proxy', fallback='')
+        self.proxy = str(proxy_setting) if proxy_setting else None # Ensure it's None if empty string
+
+        interval_setting = self.config_manager.get_setting('Settings', 'screenshotInterval', type=int, fallback=1)
+        self.interval = int(interval_setting) * 60 if interval_setting is not None else 60 # Ensure int, convert to seconds
 
         # 配置代理
-        self.proxies = {
-            'http': self.proxy,
-            'https': self.proxy
-        } if self.proxy else None
-
-        if self.proxies:
+        if self.proxy:
+            self.proxies = {'http': self.proxy, 'https': self.proxy}
             self.logger.info(f"Using proxy: {self.proxy}")
         else:
+            self.proxies = None
             self.logger.info("No proxy configured.")
 
         # 确保数据文件夹存在
         os.makedirs(self.data_folder, exist_ok=True)
         self.logger.info(f"Data folder '{self.data_folder}' ensured to exist for screenshots.")
 
-    def take_screenshot(self):
+    def take_screenshot(self) -> Optional[str]:
         """截取全屏并保存"""
         try:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -59,7 +77,7 @@ class ScreenshotSender:
             self.logger.error(f"Error taking screenshot: {str(e)}")
             return None
 
-    def send_screenshot(self, usage_time_seconds):
+    def send_screenshot(self, usage_time_seconds: float) -> bool:
         """发送截图到 Telegram"""
         filepath = self.take_screenshot()
         if not filepath:
@@ -125,7 +143,7 @@ class ScreenshotSender:
                     self.logger.error(f"Error deleting screenshot file {filepath}: {e}")
         return True
 
-    def run(self):
+    def run(self) -> None:
         """线程运行方法，持续发送截图"""
         self.running = True
         self.logger.info("ScreenshotSender thread started.")
@@ -140,7 +158,7 @@ class ScreenshotSender:
             self.running = False
             self.logger.info("ScreenshotSender thread fully exited.")
 
-    def stop(self):
+    def stop(self) -> None:
         """停止截图发送线程"""
         self.running = False
         self.logger.info("ScreenshotSender stopping.")

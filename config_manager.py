@@ -1,16 +1,19 @@
 import configparser
 import os
 import logging
+from typing import Optional, Union, Dict, List, Any, Type
 
 class ConfigManager:
-    CONFIG_FILE = 'config.ini'
+    CONFIG_FILE: str = 'config.ini'
+    logger: logging.Logger
+    config: configparser.ConfigParser
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logging.getLogger("ConfigManager")
         self.config = configparser.ConfigParser()
         self._load_config()
 
-    def _load_config(self):
+    def _load_config(self) -> None:
         if not os.path.exists(self.CONFIG_FILE):
             self.logger.warning(f"Configuration file '{self.CONFIG_FILE}' not found. Creating with default settings.")
             self._create_default_config()
@@ -18,7 +21,7 @@ class ConfigManager:
         self.config.read(self.CONFIG_FILE, encoding='utf-8')
         self.logger.info(f"Configuration loaded from {self.CONFIG_FILE}")
 
-    def _create_default_config(self):
+    def _create_default_config(self) -> None:
         # 定义默认设置
         self.config['Settings'] = {
             'dataFolder': '.\\screenshots',
@@ -42,7 +45,7 @@ class ConfigManager:
         self.save_config()
         self.logger.info(f"Default '{self.CONFIG_FILE}' created.")
 
-    def get_setting(self, section, key, type=str, fallback=None):
+    def get_setting(self, section: str, key: str, type: Type = str, fallback: Optional[Any] = None) -> Optional[Any]:
         try:
             if type == bool:
                 return self.config.getboolean(section, key)
@@ -59,14 +62,14 @@ class ConfigManager:
             self.logger.error(f"Error converting setting [{section}]{key} to type {type.__name__}. Using fallback: {fallback}")
             return fallback
 
-    def set_setting(self, section, key, value):
+    def set_setting(self, section: str, key: str, value: Any) -> None:
         if not self.config.has_section(section):
             self.config.add_section(section)
         # 确保保存的值是字符串类型
         self.config.set(section, key, str(value))
         self.logger.debug(f"Setting [{section}]{key} set to {value}")
 
-    def save_config(self):
+    def save_config(self) -> None:
         try:
             # 确保以 utf-8 编码写入
             with open(self.CONFIG_FILE, 'w', encoding='utf-8') as configfile:
@@ -75,7 +78,7 @@ class ConfigManager:
         except Exception as e:
             self.logger.error(f"Error saving configuration: {e}")
 
-    def get_section_settings(self, section):
+    def get_section_settings(self, section: str) -> Dict[str, str]:
         """
         获取指定 section 下的所有键值对。
         返回一个字典。
@@ -87,13 +90,13 @@ class ConfigManager:
         self.logger.warning(f"Section '{section}' not found in config.")
         return {}
 
-    def get_all_sections(self):
+    def get_all_sections(self) -> List[str]:
         """
         获取所有 section 的名称列表。
         """
         return self.config.sections()
 
-    def get_all_settings(self):
+    def get_all_settings(self) -> Dict[str, Dict[str, str]]:
         """
         获取所有 section 的所有键值对，按 section 分组。
         返回一个嵌套字典，格式为 {section_name: {key: value, ...}, ...}。

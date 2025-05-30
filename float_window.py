@@ -2,19 +2,34 @@ import tkinter as tk
 from tkinter import font
 import threading
 import logging
-import time  # 确保导入 time 模块
+import time
+from typing import Optional
+from usage_tracker import UsageTracker
 
 
 class FloatWindow:
-    def __init__(self, master_root, usage_tracker):  # 接收主 Tkinter 根窗口
+    logger: logging.Logger
+    usage_tracker: UsageTracker
+    root: Optional[tk.Toplevel]
+    time_label: Optional[tk.Label]
+    running: bool
+    master_root: tk.Tk
+
+    # 为拖动功能添加实例变量类型提示
+    _drag_x: int
+    _drag_y: int
+
+    def __init__(self, master_root: tk.Tk, usage_tracker: UsageTracker) -> None:
         self.logger = logging.getLogger("FloatWindow")
         self.usage_tracker = usage_tracker
         self.root = None
         self.time_label = None
         self.running = False
-        self.master_root = master_root  # 存储主根窗口的引用
+        self.master_root = master_root
+        self._drag_x = 0 # Initialize drag coordinates
+        self._drag_y = 0 # Initialize drag coordinates
 
-    def create_window(self):
+    def create_window(self) -> None:
         """创建浮动窗口 (现在是 Toplevel 窗口)"""
         # 检查是否已经创建，避免重复创建
         if self.root and self.root.winfo_exists():
@@ -45,55 +60,87 @@ class FloatWindow:
         self.time_label.pack()
 
         # 绑定鼠标事件 - 拖动窗口
-        def on_drag_start(event):
-            self.root.x = event.x
-            self.root.y = event.y
+        def on_drag_start(event: tk.Event) -> None:
+            # Store initial mouse click position relative to the window
+            self._drag_x = event.x
+            self._drag_y = event.y
 
-        def on_drag_motion(event):
-            x = self.root.winfo_pointerx() - self.root.x - self.root.winfo_rootx()
-            y = self.root.winfo_pointery() - self.root.y - self.root.winfo_rooty()
-            self.root.geometry(f"+{x}+{y}")
+        def on_drag_motion(event: tk.Event) -> None:
+            # Calculate new window position based on mouse movement
+            # event.x_root and event.y_root are screen coordinates of the mouse
+            # self.root.winfo_x() and self.root.winfo_y() are current window top-left
+            # No, this original logic was a bit off. Let's correct it.
+            # The new top-left corner (x, y) of the window should be:
+            # current_mouse_screen_x - initial_click_offset_x
+            # current_mouse_screen_y - initial_click_offset_y
+            if self.root: # Ensure root exists
+                x = self.root.winfo_pointerx() - self._drag_x
+                y = self.root.winfo_pointery() - self._drag_y
+                self.root.geometry(f"+{x}+{y}")
 
-        self.time_label.bind("<Button-1>", on_drag_start)
-        self.time_label.bind("<B1-Motion>", on_drag_motion)
+        if self.time_label: # Ensure time_label exists before binding
+            self.time_label.bind("<Button-1>", on_drag_start)
+            self.time_label.bind("<B1-Motion>", on_drag_motion)
 
-        # 窗口关闭协议（Toplevel 窗口的 destroy）
-        self.root.protocol("WM_DELETE_WINDOW", self.stop)
+        if self.root: # Ensure root exists before setting protocol or geometry
+            # 窗口关闭协议（Toplevel 窗口的 destroy）
+            self.root.protocol("WM_DELETE_WINDOW", self.stop)
 
-        # 初始位置
-        screen_width = self.root.winfo_screenwidth()
-        window_width = 320
-        x_position = (screen_width - window_width) // 2
-        self.root.geometry(f"{window_width}x50+{x_position}+0")
+            # 初始位置
+            screen_width = self.root.winfo_screenwidth()
+            window_width = 320 # Assuming a fixed width for calculation
+            # Ensure window_width is calculated or fetched if dynamic
+            # For instance, self.root.update_idletasks(); window_width = self.root.winfo_width();
+            x_position = (screen_width - window_width) // 2
+            self.root.geometry(f"{window_width}x50+{x_position}+0") # Assuming height 50
 
-        self.update_time()  # 首次调用更新时间
+            self.update_time()  # 首次调用更新时间
+            self.logger.info("Float window Toplevel created.")
+        else:
+            self.logger.error("Root window was not created, cannot complete setup.")
 
-        self.logger.info("Float window Toplevel created.")
 
-    def update_time(self):
+    def update_time(self) -> None:
         """更新时间显示"""
-        if self.time_label and self.running and self.root and self.root.winfo_exists():  # 增加检查窗口是否存在
-            current_time = self.usage_tracker.format_time(self.usage_tracker.get_usage_time())
-            self.time_label.config(text=f"今日使用: {current_time}")
-            self.logger.debug(f"Updated float window time: {current_time}")
-            self.root.after(1000, self.update_time)  # 每秒更新一次
-        elif self.time_label and self.running and (not self.root or not self.root.winfo_exists()):
-            # 如果窗口不存在，但running是True，说明窗口被外部关闭了，停止更新
-            self.logger.info("Float window no longer exists, stopping updates.")
+        if self.time_label and self.running and self.root and self.root.winfo_exists():
+            current_usage_seconds = self.usage_tracker.get_usage_time()
+            current_time_formatted = self.usage_tracker.format_time(current_usage_seconds)
+            self.time_label.config(text=f"今日使用: {current_time_formatted}")
+            self.logger.debug(f"Updated float window time: {current_time_formatted}")
+            self.root.after(1000, self.update_time)
+        elif self.running and (not self.root or not self.root.winfo_exists()):
+            self.logger.info("Float window no longer exists or not running, stopping updates.")
             self.running = False
 
-    def run(self):
+    def run(self) -> None:
         """运行浮动窗口线程逻辑，在主线程中创建窗口"""
+        if not isinstance(self.master_root, tk.Tk) or not self.master_root.winfo_exists():
+            self.logger.error("Master root is not a valid Tk window or has been destroyed. Cannot run FloatWindow.")
+            return
+
         self.running = True
         self.logger.info("Float window thread started.")
-        # 在主 Tkinter 线程中调度窗口创建
         self.master_root.after(0, self.create_window)
 
-        # 这个循环现在只是保持线程活跃，直到 stop() 被调用
         while self.running:
-            time.sleep(1)  # 简单休眠，不阻塞主UI线程
+            try:
+                # Check if master_root is still valid, otherwise stop thread
+                if not self.master_root.winfo_exists():
+                    self.logger.warning("Master root window destroyed, stopping FloatWindow thread.")
+                    self.stop()
+                    break
+                time.sleep(1)
+            except tk.TclError as e:
+                self.logger.error(f"TclError in FloatWindow run loop (master_root likely destroyed): {e}")
+                self.stop()
+                break
+            except Exception as e:
+                self.logger.error(f"Unexpected error in FloatWindow run loop: {e}")
+                self.stop() # Stop on other critical errors too
+                break
 
-    def stop(self):
+
+    def stop(self) -> None:
         self.running = False
         if self.root and self.root.winfo_exists():  # 检查窗口是否存在
             self.root.destroy()  # 销毁 Toplevel 窗口

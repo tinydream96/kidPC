@@ -11,6 +11,7 @@ import logging
 
 logger = logging.getLogger("ConfigUI")
 
+# --- 修改开始: 增加UI字符串 ---
 UI_STRINGS = {
     'zh_CN': {
         'error_title': "错误",
@@ -21,6 +22,7 @@ UI_STRINGS = {
         'config_window_title': "配置设置",
         'password_prompt_title': "密码验证",
         'password_prompt_label': "请输入密码：",
+        'exit_password_prompt': "请输入密码以退出程序：", # 新增
         'password_error_message': "密码错误！",
         'save_button_text': "保存",
         'info_title': "提示",
@@ -31,6 +33,7 @@ UI_STRINGS = {
         'new_password_empty_message': "新密码不能为空。",
     }
 }
+# --- 修改结束 ---
 
 
 class ConfigUI:
@@ -191,12 +194,39 @@ class ConfigUI:
     def _schedule_quit_app(self):
         self.root.after(0, self.quit_app)
 
+    # --- 修改开始: 重写 quit_app 方法 ---
     def quit_app(self):
-        logger.info("Quitting application via tray icon.")
-        if self.tray:
-            self.tray.stop()
-            logger.debug("Tray icon stopped.")
-        # 通知主 Tkinter 根窗口销毁
-        if self.root:
-            self.root.quit()  # 使用 quit() 而不是 destroy() 来停止 mainloop
-            logger.debug("Main Tkinter root quit signaled.")
+        """
+        在退出程序前请求密码验证。
+        """
+        self.root.deiconify()
+        password = simpledialog.askstring(
+            self.get_string('password_prompt_title'),
+            self.get_string('exit_password_prompt'),  # 使用新的提示语
+            show='*',
+            parent=self.root
+        )
+        self.root.withdraw()
+
+        # 检查密码是否正确
+        if password == self.password:
+            logger.info("Correct password entered. Quitting application via tray icon.")
+            if self.tray:
+                self.tray.stop()
+                logger.debug("Tray icon stopped.")
+            # 通知主 Tkinter 根窗口销毁
+            if self.root:
+                self.root.quit()  # 使用 quit() 来停止 mainloop
+                logger.debug("Main Tkinter root quit signaled.")
+        # 如果用户输入了密码但错误
+        elif password is not None:
+            messagebox.showerror(
+                self.get_string('error_title'),
+                self.get_string('password_error_message'),
+                parent=self.root
+            )
+            logger.warning("Incorrect password entered for quitting.")
+        # 如果用户点击了取消(password is None)，则不执行任何操作
+        else:
+            logger.info("Quit operation cancelled by user.")
+    # --- 修改结束 ---

@@ -40,7 +40,13 @@ class ConfigManager:
             'continuousUsageThreshold': '10', # 连续使用多久后强制休息（分钟）
             'forcedRestDuration': '1', # 强制休息时长（分钟）
             'forcedShutdownHour': '22', # 强制关机时间（小时）
-            'adminPassword': 'admin' # 管理员密码
+            'adminPassword': 'admin', # 管理员密码
+            # 钉钉相关配置
+            'enabledingtalk': 'false', # 是否启用钉钉发送 (true/false)
+            'dingtalkwebhook': '', # 钉钉机器人Webhook地址
+            'dingtalksecret': '', # 钉钉机器人加签密钥（可选）
+            'dingtalkinterval': '5', # 钉钉发送间隔（分钟）
+            'imgbbapi': '' # ImgBB API Key (用于图片上传)
         }
         self.save_config()
         self.logger.info(f"Default '{self.CONFIG_FILE}' created.")

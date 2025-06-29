@@ -8,6 +8,7 @@ from float_window import FloatWindow
 from rest_reminder import RestReminder
 from config_manager import ConfigManager # 确保导入 ConfigManager
 from config_ui import ConfigUI # 确保导入 ConfigUI
+from dingtalk_sender import DingTalkSender # 导入钉钉发送器
 
 # 配置日志
 logging.basicConfig(
@@ -36,6 +37,7 @@ today_usage_time_seconds = tracker.load_usage_stats()
 logging.info(f"Loaded today's usage time: {tracker.format_time(today_usage_time_seconds)}")
 
 sender = ScreenshotSender(config_manager, usage_tracker=tracker) # 传递 ConfigManager
+dingtalk_sender = DingTalkSender(config_manager, usage_tracker=tracker) # 钉钉发送器
 float_window = FloatWindow(root, tracker) # 传递主根窗口
 reminder = RestReminder(root, config_manager, usage_tracker=tracker) # 传递主根窗口和 ConfigManager
 
@@ -73,6 +75,22 @@ try:
     screenshot_sender_thread.start()
     logging.info("Screenshot sender thread started.")
 
+    # 启动钉钉发送线程
+    # 尝试多种可能的键名来读取钉钉启用状态
+    dingtalk_enabled = False
+    for key in ['enabledingtalk', 'enableDingTalk', 'enable_dingtalk']:
+        setting = config_manager.get_setting('Settings', key, type=bool, fallback=None)
+        if setting is not None:
+            dingtalk_enabled = setting
+            break
+    
+    if dingtalk_enabled:
+        dingtalk_sender_thread = threading.Thread(target=dingtalk_sender.run, daemon=True)
+        dingtalk_sender_thread.start()
+        logging.info("DingTalk sender thread started.")
+    else:
+        logging.info("DingTalk sender is disabled in config.")
+
     # 运行 Tkinter 主循环
     # 这一行必须是主线程的最后一步，它会保持程序运行，处理所有UI事件
     logging.info("Starting Tkinter main loop.")
@@ -87,6 +105,7 @@ finally:
     # 在这里添加清理代码，确保所有线程停止和数据保存
     tracker.stop_tracking() # 确保tracker停止并保存数据
     float_window.stop() # 确保浮窗线程停止
+    dingtalk_sender.stop() # 确保钉钉发送线程停止
     # reminder 线程和 sender 线程的停止已在其 run() 方法的 finally 块中处理，
     # 或者通过 self.running 标志位在外部控制。
     # 对于守护线程，当主程序退出时它们会自动终止，但显式停止会更好。

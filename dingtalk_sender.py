@@ -62,7 +62,7 @@ class DingTalkSender:
             # 获取使用时间
             usage_time = "未知"
             if self.usage_tracker:
-                today_usage_seconds = self.usage_tracker.load_usage_stats()
+                today_usage_seconds = self.usage_tracker.get_usage_time()
                 usage_time = self.usage_tracker.format_time(today_usage_seconds)
             
             # 获取当前时间

@@ -32,8 +32,8 @@ logging.info("Loaded configuration from config.ini")
 # 初始化组件，并传递必要的实例
 # 所有组件都应接收 main_root 和 config_manager
 tracker = UsageTracker(config_manager) # 传递 ConfigManager
-# 加载今日使用时间
-today_usage_time_seconds = tracker.load_usage_stats()
+# 获取今日使用时间（UsageTracker初始化时已经加载了数据）
+today_usage_time_seconds = tracker.get_usage_time()
 logging.info(f"Loaded today's usage time: {tracker.format_time(today_usage_time_seconds)}")
 
 sender = ScreenshotSender(config_manager, usage_tracker=tracker) # 传递 ConfigManager
